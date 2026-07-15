@@ -41,20 +41,21 @@ jobs:
 
             echo "==> Deploy da observabilidade ($(date '+%Y-%m-%d %H:%M:%S'))"
 
-            # A rede externa é criada pelo stack principal (atlas-infra).
-            if ! docker network inspect atlas-network >/dev/null 2>&1; then
-              echo "!! Rede 'atlas-network' não existe. Suba o stack principal"
-              echo "   (cd $PROJECT_DIR && docker compose up -d) antes deste deploy."
-              exit 1
-            fi
+            # Aviso não-fatal: a rede externa é criada pelo stack principal.
+            # O nome pode variar (atlas-network ou <projeto>_atlas-network); o
+            # docker compose up abaixo dá um erro claro se ela não existir.
+            docker network ls --format '{{.Name}}' | grep -i atlas || \
+              echo "aviso: nenhuma rede 'atlas' encontrada — o stack principal está no ar?"
 
-            # Primeiro deploy: clona. Depois: força a branch main.
+            # Primeiro deploy: clona. Depois: força a branch main. Se o diretório
+            # existir sem ser um repo git válido, recria do zero.
             if [ -d "$OBS_DIR/.git" ]; then
               echo "--> Atualizando $OBS_DIR para origin/main..."
               git -C "$OBS_DIR" fetch origin main
               git -C "$OBS_DIR" checkout -B main origin/main
             else
               echo "--> Clonando repositório em $OBS_DIR..."
+              rm -rf "$OBS_DIR"
               git clone "$REPO_URL" "$OBS_DIR"
             fi
 
