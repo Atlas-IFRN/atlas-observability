@@ -1,0 +1,15 @@
+# Provider que carrega os dashboards em JSON deste diretório no boot.
+apiVersion: 1
+
+providers:
+  - name: Atlas
+    orgId: 1
+    folder: Atlas
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false

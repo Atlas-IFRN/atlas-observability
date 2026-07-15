@@ -1,0 +1,54 @@
+# Configuração de scrape do Prometheus para o stack Atlas.
+#
+# O Prometheus roda na mesma rede `atlas-network` e resolve cada serviço pelo
+# nome do container. Os serviços Django expõem /metrics via django-prometheus
+# (porta interna 8000); o ai-service (FastAPI) expõe /metrics na 8003.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: atlas
+
+scrape_configs:
+  # O próprio Prometheus.
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # ─── Serviços Django (django-prometheus, porta 8000) ────────
+  - job_name: auth
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["auth-service:8000"]
+        labels: { service: auth }
+
+  - job_name: feed
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["feed-service:8000"]
+        labels: { service: feed }
+
+  - job_name: tracks
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["tracks-service:8000"]
+        labels: { service: tracks }
+
+  - job_name: scholarship
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["scholarship-service:8000"]
+        labels: { service: scholarship }
+
+  - job_name: notification
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["notification-service:8000"]
+        labels: { service: notification }
+
+  # ─── Serviço FastAPI (prometheus-fastapi-instrumentator) ────
+  - job_name: ai
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["ai-service:8003"]
+        labels: { service: ai }
