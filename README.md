@@ -31,8 +31,13 @@ exposto pelo gateway nginx.
 docker compose up -d
 ```
 
-- **Grafana:** http://localhost:3000 — usuário `admin`, senha `atlas`
+- **Grafana:** http://localhost:3000/grafana/ — usuário `admin`, senha `atlas`
 - **Prometheus:** http://localhost:9090 (aba *Status → Targets* para ver o scrape)
+
+Em produção o Grafana é exposto pelo gateway nginx em **`/grafana/`**
+(ex.: `http://144.126.151.140/grafana/`) — ver seção *Deploy*. O `docker-compose`
+já configura o Grafana em sub-path (`GF_SERVER_SERVE_FROM_SUB_PATH`), então o
+mesmo caminho vale no acesso direto pela porta 3000.
 
 O datasource Prometheus e o dashboard **"Atlas — Visão Geral dos Serviços"**
 são provisionados automaticamente no boot (não precisa importar nada).
@@ -57,6 +62,7 @@ O painel **Atlas — Visão Geral** traz, com um seletor de `$service`:
 ```
 .
 ├── docker-compose.yml
+├── .github/workflows/deploy.yml          # deploy SSH para produção
 ├── prometheus/
 │   └── prometheus.yml                    # jobs de scrape dos serviços
 └── grafana/
@@ -66,6 +72,38 @@ O painel **Atlas — Visão Geral** traz, com um seletor de `$service`:
             ├── dashboards.yml            # provider de dashboards
             └── atlas-overview.json       # dashboard genérico
 ```
+
+## Deploy (produção)
+
+Deploy automático via GitHub Actions (`.github/workflows/deploy.yml`) a cada
+push na `main`, ou manualmente em *Actions → Deploy observability → Run*.
+
+O workflow entra por SSH no servidor e:
+
+1. Confere se a rede `atlas-network` existe (criada pelo stack principal — ele
+   precisa estar no ar);
+2. Clona o repo em **`/home/production/observability`** (ou atualiza para
+   `origin/main` se já existir);
+3. Sobe o stack com `docker compose up -d`.
+
+O Grafana fica acessível pelo gateway nginx do `atlas-infra` em **`/grafana/`**
+(a rota `location /grafana/` já está no `nginx/nginx.conf` do atlas-infra,
+apontando para `atlas-grafana:3000`).
+
+### Secrets necessários (no repositório)
+
+Os mesmos dos outros repositórios Atlas — *Settings → Secrets and variables →
+Actions*:
+
+| Secret         | Valor                     |
+|----------------|---------------------------|
+| `SSH_HOST`     | IP do servidor            |
+| `SSH_USER`     | usuário SSH               |
+| `SSH_PASSWORD` | senha SSH                 |
+
+> **Segurança:** o Grafana sobe com `admin`/`atlas`. Troque a senha em produção
+> (via UI ou `GF_SECURITY_ADMIN_PASSWORD` antes do 1º boot) já que a rota
+> `/grafana/` é pública pelo gateway.
 
 ## Integração nos serviços
 

@@ -1,0 +1,74 @@
+name: Deploy observability to production
+
+# Sobe/atualiza o stack de observabilidade (Prometheus + Grafana) no servidor.
+# Dispara no push para main (produção) e manualmente. O stack é SEPARADO do
+# atlas-infra: mora em /home/production/observability e anexa-se à rede externa
+# `atlas-network` (criada pelo stack principal — este precisa estar no ar).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      pull_images:
+        description: "Puxar imagens novas (docker compose pull) antes de subir"
+        required: false
+        default: "false"
+        type: boolean
+
+concurrency:
+  group: deploy-observability
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: SSH deploy (observability)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host:     ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          script_stop: true
+          command_timeout: 15m
+          script: |
+            set -e
+            PROJECT_DIR="/home/production"
+            OBS_DIR="$PROJECT_DIR/observability"
+            REPO_URL="https://github.com/Atlas-IFRN/atlas-observability.git"
+
+            echo "==> Deploy da observabilidade ($(date '+%Y-%m-%d %H:%M:%S'))"
+
+            # A rede externa é criada pelo stack principal (atlas-infra).
+            if ! docker network inspect atlas-network >/dev/null 2>&1; then
+              echo "!! Rede 'atlas-network' não existe. Suba o stack principal"
+              echo "   (cd $PROJECT_DIR && docker compose up -d) antes deste deploy."
+              exit 1
+            fi
+
+            # Primeiro deploy: clona. Depois: força a branch main.
+            if [ -d "$OBS_DIR/.git" ]; then
+              echo "--> Atualizando $OBS_DIR para origin/main..."
+              git -C "$OBS_DIR" fetch origin main
+              git -C "$OBS_DIR" checkout -B main origin/main
+            else
+              echo "--> Clonando repositório em $OBS_DIR..."
+              git clone "$REPO_URL" "$OBS_DIR"
+            fi
+
+            cd "$OBS_DIR"
+
+            if [ "${{ github.event.inputs.pull_images }}" = "true" ]; then
+              echo "--> Puxando imagens..."
+              docker compose pull
+            fi
+
+            echo "--> Subindo Prometheus + Grafana..."
+            docker compose up -d --remove-orphans
+
+            docker image prune -f
+            echo ""
+            docker compose ps
+            echo "✓ Observabilidade atualizada."
